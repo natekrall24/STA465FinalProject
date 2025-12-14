@@ -1,0 +1,459 @@
+---
+title: "STA 465: High-Dimensional Analysis of Spotify Music"
+author: "Nate Krall and Viraj Acharya"
+date: "December 15, 2025"
+format:
+  html:
+    title-align: center
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    theme: cosmo
+---
+
+```{r}
+#| include: false
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center"
+)
+```
+
+## Introduction
+
+### Description of the Data
+
+The dataset we selected for our final project is the Spotify Tracks Dataset authored by Maharshi Pandya and hosted on Kaggle. The dataset is fully public and can be accessed freely without restrictions. This dataset contains detailed audio features, metadata, and popularity statistics for over 114,000 songs available on Spotify. Its primary uses include exploratory music analytics, machine learning for popularity prediction, audio feature engineering, and music recommendation system development.
+
+Each row of the dataset represents a single track, and each column corresponds to one of Spotify’s engineered attributes or metadata fields. The dataset, which is 20.12 MB in size and of CSV format, includes a mixture of variable types:
+
+-   **Numerical variables:** popularity (0–100 score based on streaming behavior), duration_ms, danceability, energy, key (pitch class), loudness (dB), mode (major/minor), speechiness, acousticness, instrumentalness, liveness, valence, tempo (BPM), time_signature.
+
+-   **Categorical variables:** explicit flag (true/false), track genre
+
+-   **Identifiers and text fields:** track_id, track_name, artists (names separated by semicolons), album_name.
+
+The data was collected and cleaned using Spotify’s Web API. As a result of this API, we are able to acquire a very rich dataset that consists of features derived from their internal data or signal processing pipelines.
+
+The primary goal of our analysis is to investigate how Spotify’s high-dimensional audio features cluster across the full collection of tracks. By applying dimensionality reduction techniques such as Principal Component Analysis and unsupervised learning methods such as k-means clustering, we aim to identify whether songs naturally group into meaningful categories based on their acoustic and structural attributes. This allows us to explore the underlying structure of Spotify’s engineered feature space and examine how characteristics like energy, valence, danceability, and acousticness contribute to broader patterns of musical similarity.
+
+### Relevance and Interest
+
+We chose this dataset because it lets us explore a new domain of audio and music that we have little experience with but find intriguing. The dataset is rich enough to apply many techniques from this course, from clustering and dimensionality reduction to regression and prediction. Furthermore, working with Spotify’s engineered audio features also provides an interesting way to study musical structure and listener behavior.
+
+## Methods
+
+### Overview
+
+Our project investigates the high-dimensional structure of Spotify’s engineered audio features by applying a combination of dimensionality reduction and center-based clustering. The goal is to understand whether quantitative music descriptors naturally group songs into coherent clusters that reflect meaningful musical similarity. Because the dataset contains over 100,000 tracks and more than a dozen correlated numeric attributes, dimensionality reduction and clustering provide a principled framework for exploring structure that cannot be observed directly in the original feature space.
+
+### Principal Component Analysis (PCA)
+
+To summarize and visualize the high-dimensional structure, we apply PCA. Given the centered data matrix $X$, PCA solves the eigenvalue problem
+
+$$
+\Sigma v_k = \lambda_k v_k,
+$$
+
+where $\Sigma = \frac{1}{n} X^\top X$ is the sample covariance matrix, $\lambda_k$ is the variance explained by the $k$-th component, and $v_k$ is its loading vector. The principal component scores $X v_k$ embed each song in a reduced-dimensional space. This enables us to examine the proportion of variance explained by each component.
+
+These components allow us to interpret latent musical dimensions. For example, loudness, energy, and tempo may load together to form an “intensity” axis, while acousticness and instrumentalness may define a contrasting “acoustic/electronic” axis. PCA is appropriate because many of Spotify’s audio features are correlated, and PCA extracts dominant sources of variation while reducing noise. PCA allows us to view this massive dataset in a much more digestible and human-intuitive way, which allows us to draw conclusions that we could not have from the original high-dimensional dataset alone.
+
+### K-means Clustering
+
+After reducing dimensionality, we apply k-means clustering to identify whether songs form meaningful groups based on their audio profiles. K-means partitions the dataset into $K$ clusters by minimizing within-cluster variance:
+
+$$
+\min_{C_1,\dots,C_K} \sum_{k=1}^K \sum_{x_i \in C_k} \|x_i - \mu_k\|^2,
+$$
+
+where $\mu_k$ is the centroid of cluster $k$. We explore clustering in both the standardized feature space and the PCA-reduced space.
+
+The number of clusters $K$ is chosen using the elbow method and silhouette scores. K-means produces interpretable centroids describing the “average” song in each group, where one cluster could represent high-energy, high-tempo tracks such as EDM or house music.
+
+### Appropriateness
+
+Together, PCA and k-means provide a coherent pipeline for high-dimensional exploration:
+
+-   PCA reduces dimensionality and highlights dominant musical factors.
+-   K-means provides a simple and scalable approach to grouping songs by audio similarity.
+-   The combination enables visualization and interpretation of high-dimensional structure, allowing us to make general observations on the dataset as well as answer specific questions highlighted below.
+
+These properties make the methods effective tools for analyzing large collections of quantitative audio features such as those considered in this project.
+
+### Analytical Plan
+
+Our analysis proceeds in several steps.
+
+#### Feature Selection and Standardization
+
+We begin by selecting continuous audio features that capture core aspects of rhythm and musical character. These include danceability, energy, loudness, speechiness, acousticness, instrumentalness, liveness, valence, tempo, duration_ms, and popularity. Each variable is numeric and reflects a measurable acoustic or structural property of a track, making them well-suited for geometric and distance-based methods such as PCA and k-means.
+
+Because these features are recorded on different scales, we standardize each feature to have mean zero and unit variance:
+
+$$
+Z_{ij} = \frac{x_{ij} - \mu_j}{\sigma_j}.
+$$
+
+Standardization prevents any single attribute from dominating the variance structure due to scale and is necessary for PCA and k-means, both of which rely on Euclidean geometry. We also remove rows with missing numeric values, although missingness is minimal due to the consistency of Spotify’s API-generated data.
+
+#### Exploratory Data Analysis
+
+We compute summary statistics and visualize feature distributions. A correlation matrix highlights relationships such as strong associations among loudness, energy, and tempo. These diagnostics inform expectations for PCA and help uncover redundancy in the feature space.
+
+#### Principal Component Analysis
+
+We perform PCA on the standardized data and examine the scree plot to determine how many components capture most variation. We interpret component loadings, visualize projections onto principal component pairs, and assess whether broad musical patterns or separations emerge. We also compare PCA structures across musical eras to evaluate whether the underlying geometry of audio features shifts over time.
+
+#### Clustering
+
+We apply k-means clustering using both the standardized feature matrix and PCA scores. For several choices of $K$, we compute inertia and silhouette scores to identify an appropriate clustering solution. The resulting clusters are characterized by centroid feature profiles and their positions in PCA space.
+
+## Analysis and Results
+
+This section contains the reproducible code used to generate figures and results for our exploratory analysis, PCA, and k-means clustering. Figures and tables in the report are generated directly from the code chunks below.
+
+### Exploratory / Preliminary Analysis
+
+```{r}
+library(dplyr)
+library(psych)  
+library(GGally)
+
+spotify <- read.csv("dataset.csv", stringsAsFactors = FALSE)
+
+# Continuous audio features that are being analyzed
+audio_features <- spotify %>%
+  select(
+    danceability, energy, loudness, speechiness, acousticness,
+    instrumentalness, liveness, valence, tempo, duration_ms, popularity
+  )
+
+# Summary statistics
+summary_stats <- psych::describe(audio_features)
+summary_stats
+```
+
+As pictured in Figure 1, the summary statistics show a unique heterogeneity across the variety of audio features collected by Spotify. Danceability, energy, and valence have means around 0.5 with small standard deviations and mild skewness, indicating many tracks sit near the middle of these zero to one scales. Loudness averages about -8.3 dB with strong negative skew and high kurtosis, where we note that loudness is measured in decibels relative to full scale. Speechiness, instrumentalness, and liveness all have low means but large positive skew and extreme kurtosis, which implies that most tracks have fewer spoken words, are not extensively instrumental, and have a weaker ambiance level overall. Additionally, tempo centers around 122 BPM with modest spread, while duration is extremely right-skewed and heavy-tailed, capturing a few very long tracks. Lastly, popularity has a broad spread but is essentially symmetric as we see by the closeness of the mean and median. These diagnostics underscore the importance of standardizing the features prior to PCA, given the substantial differences in scale and variability across variables. The heterogeneity and skewness observed here also motivated our use of PCA to extract dominant axes of variation and reduce noise before applying clustering methods.
+
+```{r}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+audio_features <- spotify %>%
+  select(
+    danceability, energy, loudness, speechiness, acousticness,
+    instrumentalness, liveness, valence, tempo, duration_ms, popularity
+  )
+
+# Convert the data to long format for faceted plotting
+audio_long <- audio_features %>%
+  pivot_longer(cols = everything(), names_to = "feature", values_to = "value")
+
+# Density plot grid
+ggplot(audio_long, aes(x = value)) +
+  geom_density(fill = "steelblue", alpha = 0.6) +
+  facet_wrap(~ feature, scales = "free", ncol = 3) +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Density Plots of Spotify Audio Features",
+    x = "Value",
+    y = "Density"
+  )
+
+```
+
+The density plots in Figure 2 highlight substantial variation in distributional shapes across features. Several variables bounded between zero and one, such as acousticness, speechiness, and liveness show strong right skew, indicating that most tracks contain low levels of these attributes with a small number of extreme cases. Additionally, variables such as tempo and popularity reveal a bit of complexity with multimodality present.
+
+```{r}
+# Correlation Heatmap
+GGally::ggcorr(audio_features, label = TRUE, hjust = 0.8, size = 3)
+```
+
+The correlation heatmap in Figure 3 reveals a strong positive relationship between energy and loudness, consistent with the expectation that louder tracks tend to be perceived as more energetic. Acousticness shows a significant negative correlation with energy, reflecting the distinction between electronically produced, high-energy tracks and more acoustic, lower-energy recordings. Other correlations are relatively weak, suggesting that most features capture distinct musical dimensions.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+audio_features <- spotify %>%
+  select(
+    danceability, energy, loudness, speechiness, acousticness,
+    instrumentalness, liveness, valence, tempo, duration_ms, popularity
+  )
+
+# Standardize all features
+audio_scaled <- scale(audio_features)
+
+# Perform PCA using prcomp()
+pca_result <- prcomp(audio_scaled, center = TRUE, scale. = TRUE)
+
+# View PCA object summary (variance explained)
+summary(pca_result)
+
+# Loadings
+pca_result$rotation
+
+# Extract PCA scores
+pca_scores <- as.data.frame(pca_result$x)
+
+# Scree plot
+var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+
+scree_data <- data.frame(
+  PC = factor(paste0("PC", 1:length(var_explained)),
+              levels = paste0("PC", 1:length(var_explained))),
+  Variance = var_explained
+)
+
+ggplot(scree_data, aes(x = PC, y = Variance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_line(aes(group = 1), color = "black") +
+  geom_point(size = 2, color = "black") +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Scree Plot: Proportion of Variance Explained",
+    x = "Principal Component",
+    y = "Proportion of Variance"
+  )
+
+# PCA scatter plot of PC1 vs PC2
+ggplot(pca_scores, aes(x = PC1, y = PC2)) +
+  geom_point(alpha = 0.3, size = 1, color = "darkred") +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "PCA Projection: PC1 vs PC2",
+    x = "PC1",
+    y = "PC2"
+  )
+
+```
+
+```{r}
+library(plotly)
+
+# 3D PCA scatter plot (PC1, PC2, PC3)
+plot_ly(
+  x = pca_scores$PC1,
+  y = pca_scores$PC2,
+  z = pca_scores$PC3,
+  type = "scatter3d",
+  mode = "markers",
+  marker = list(size = 2, color = pca_scores$PC1, colorscale = "Viridis")
+) %>%
+  layout(
+    title = "3D PCA Scatter Plot",
+    scene = list(
+      xaxis = list(title = "PC1"),
+      yaxis = list(title = "PC2"),
+      zaxis = list(title = "PC3")
+    )
+  )
+
+```
+
+```{r}
+library(knitr)
+loadings <- pca_result$rotation
+loadings
+kable(loadings, digits = 3, caption = "PCA Loadings for Audio Features")
+```
+
+```{r}
+library(ggplot2)
+
+loadings_df <- as.data.frame(pca_result$rotation[,1:2])
+loadings_df$feature <- rownames(loadings_df)
+
+ggplot(loadings_df, aes(x = PC1, y = PC2, label = feature)) +
+  geom_point(color = "red") +
+  geom_text(vjust = -0.5) +
+  geom_segment(aes(x = 0, y = 0, xend = PC1, yend = PC2),
+               arrow = arrow(length = unit(0.2, "cm"))) +
+  theme_minimal() +
+  labs(title = "PCA Loadings Plot (PC1 vs PC2)")
+
+```
+
+```{r}
+var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+
+data.frame(
+  PC = paste0("PC", 1:length(var_explained)),
+  Variance = round(var_explained, 4),
+  Cumulative = round(cumsum(var_explained), 4)
+)
+
+```
+
+```{r}
+ggplot(pca_scores, aes(PC1, PC2, color = spotify$popularity)) +
+  geom_point(alpha = 0.4, size = 1) +
+  scale_color_viridis_c() +
+  theme_minimal() +
+  labs(title = "PCA Colored by Song Popularity", color = "Popularity")
+```
+
+```{r}
+ggplot(pca_scores, aes(PC1, PC2, color = spotify$track_genre)) +
+  geom_point(alpha = 0.5, size = 1) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(title = "PCA Colored by Genre")
+```
+
+```{r}
+outliers <- pca_scores %>%
+  mutate(id = row_number()) %>%
+  filter(abs(PC1) > 4 | abs(PC2) > 4)
+
+# outliers
+```
+
+```{r}
+# Filter dataset to popular songs only
+popular_songs <- spotify %>%
+  filter(popularity >= 60)
+
+nrow(popular_songs)   # Check how many remain
+```
+
+```{r}
+pop_features <- popular_songs %>%
+  select(
+    danceability, energy, loudness, speechiness, acousticness,
+    instrumentalness, liveness, valence, tempo, duration_ms, popularity
+  )
+
+pop_scaled <- scale(pop_features)
+```
+
+```{r}
+pca_pop <- prcomp(pop_scaled, center = TRUE, scale. = TRUE)
+pca_pop_scores <- as.data.frame(pca_pop$x)
+```
+
+```{r}
+pca_pop_reduced <- pca_pop_scores[, 1:3]
+set.seed(123)
+
+wcss_pop <- sapply(2:10, function(k) {
+  kmeans(pca_pop_reduced, centers = k, nstart = 15)$tot.withinss
+})
+
+plot(2:10, wcss_pop, type = "b", pch = 19,
+     xlab = "Number of Clusters K",
+     ylab = "Total Within-Cluster Sum of Squares",
+     main = "Elbow Plot for K-means (Popular Songs, PCA Space)")
+```
+
+So, 4 clusters seems like a reasonable choice.
+
+```{r}
+pca_pop_reduced <- pca_pop_scores[, 1:3]
+
+set.seed(123)
+k_pop <- kmeans(pca_pop_reduced, centers = 4, nstart = 20)
+
+# Add cluster labels back to data
+pca_pop_scores$cluster <- factor(k_pop$cluster)
+popular_songs$cluster <- factor(k_pop$cluster)
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(pca_pop_scores, aes(PC1, PC2, color = cluster)) +
+  geom_point(alpha = 0.6, size = 1) +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "K-means Clusters Among Popular Songs (PCA Space)",
+    x = "PC1",
+    y = "PC2",
+    color = "Cluster"
+  )
+
+```
+
+```{r}
+set.seed(123)
+k_final_pop <- kmeans(pca_pop_reduced, centers = 4, nstart = 30)
+
+popular_songs$cluster <- factor(k_final_pop$cluster)
+pca_pop_scores$cluster <- factor(k_final_pop$cluster)
+```
+
+```{r}
+cluster_feature_means <- popular_songs %>%
+  group_by(cluster) %>%
+  summarise(across(
+    c(danceability, energy, loudness, speechiness, acousticness,
+      instrumentalness, liveness, valence, tempo, duration_ms, popularity),
+    mean,
+    na.rm = TRUE
+  ))
+
+# cluster_feature_means
+```
+
+```{r}
+# Distance of each song to the centroid of cluster 2
+centroid_pc <- k_pop$centers[2, ]
+
+popular_songs$dist_to_c2 <- rowSums((pca_pop_reduced - centroid_pc)^2)
+
+cluster2_representatives <- popular_songs %>%
+  filter(cluster == 2) %>%
+  arrange(dist_to_c2) %>%
+  head(20)
+
+# cluster2_representatives
+```
+
+```{r}
+cluster2_songs <- popular_songs %>%
+  filter(cluster == 2) %>%
+  select(track_name, artists, popularity, everything())
+
+# head(cluster2_songs, 20)
+```
+
+## Discussion
+
+### Findings
+
+#### Principal Component Analysis: Dominant Feature Insights
+
+The PCA analysis was motivated by correlations observed that we outlined in our summary statistics. Notably, the strong positive correlation between energy and loudness along with the strong negative correlation between energy and acousticness. These correlations suggested that a reduced representation would potentially help us uncover dominant axes of musical variation. The loadings show that PC1 primarily captures an energy–acoustic profile, with high positive contributions from acousticness and negative loadings from loudness, energy, and danceability. On the other hand, PC2 reflects more significantly positive contributions from valence and danceability, thereby separating upbeat tracks from those that have more speech heavy characteristics. Overall, the PC1-PC2 loadings plot in Figure 5 reinforces that there are clear opposing directions for energetic versus acoustic features.
+
+As seen in Figure 6, the PCA projections show that popularity does not form any sharp clusters in the PC space and we do not have strong linear relationships with the principal components. Further, the 3D plot represented in Figure 7 indicates that much of the variation lies in a compressed manifold. We note that in this plot the color reflects point depth rather than popularity coloring as we did in Figure 6. Overall, PCA provides a compact summary of the feature space and a useful foundation for subsequent clustering analysis.
+
+#### K-means Clustering
+
+Before applying k-means clustering in the PCA space, we derived an elbow plot for k-means to select the appropriate number of clusters. The elbow plot in Figure 8 shows a clear dropoff in the total within-cluster sum of squares beyond k = 4, therefore we proceeded with 4 clusters. The visualization of these clusters in Figure 9 reveals compact groups shaped by the dominant PCA axes. The cluster specific feature means that we display in Figure 10 clarify these vivid distinctions. For example, cluster 2 corresponds to highly acoustic and low energy tracks, while cluster 4 reflects high danceability tracks that have a high tempo and valence. Additionally, cluster 3 corresponds to energetic yet instrumentally sparse songs. Lastly, cluster 1 corresponds to a rough middle ground in all of the audio qualities of all the other clusters. Ultimately, these results suggest that highly popular songs partition into these clear regions that are described by a few key audio qualities, thus reinforcing the PCA findings we discovered earlier. Ultimately, we can take away this unique insight that there are 4 distinct clusters that some of the most popular songs can be grouped into, and their similarity lies in a couple of core features in our dataset such as acousticness, energy, tempo, valence, and instrumentalness.
+
+### Early-Stage Decisions
+
+Our early stage choices were driven by both the structure of the dataset's variables and the requirements of PCA and clustering. First, we standardized all the audio features to ensure comparability across variables measured on different scales. This was essential for PCA, which we know is sensitive to scale. Furthermore, it was likewise important for k-means which relies on Euclidean distances. We also filtered the dataset to focus on popular songs above a certain threshold (discussed below as part of a challenge we faced), reflecting our interest in the stylistic patterns that exist within highly successful music.
+
+Additionally, although not an explicit aim of this project, we subtely had to make a decision on how to grapple with PCA dimensionality within our k-means. For example, it became quite apparent that k-means is pretty sensitive to PCA dimensionality, where if we used PC1 to PC5 instead of PC1 to PC3, we would notice an absolute doubling in total within-cluster sum of squares and simultaneously would have led us to select a larger number of clusters. Our approach in selecting PC1 to PC3 enabled us to emphasize the dominant sources of variance driven by core musical attributes such as energy or loudness into clear, identifiable clusters. While incorporating more PCs could lead to more nuanced variation, it comes at the cost of increased noise that makes it hard to get clear insights.
+
+### Challenges
+
+One of the major practical challenges we faced was the computational complexity. The full dataset contains roughly 114,000 tracks, and running PCA and repeated k-means fits on the full dataset produced significant runtime and memory issues. To ensure better reproducibility and efficiency, we trimmed the working dataset to a size of 14,822 tracks by applying a popularity threshold requirement of 0.6. We thought this threshold was relatively fair since our goal was to conduct our analysis on songs that are relatively mainstream and relevant as opposed to songs that have simply never been heard of or played much. With further regard to the threshold we selected, we noticed that lower thresholds led to a heavy increase in the dataset size that contributed limited additional structure at the cost of more runtime. On the other hand, higher thresholds reduced the dataset too much and were ultimately just the most mainstream popular songs. The chosen threshold therefore reflects a healthy balance that preserves our goal of being relevant enough to be worthwhile in extracting user insight out of, while also being computational feasible.
+
+Another challenge we must note is related to PCA. We largely anticipated the high degree of correlation among Spotify's engineered audio features would result in a small number of principal components dominating the variance, as naturally there is so much similarity preventing the ability to capture very granular musical structures. As we saw in practice, the PCA behaved largely as expected, where the early components were driven by the strongly correlated features. This reinforced the importance of careful interpretation of principal component loadings rather than relying solely on low-dimensional visualizations. Lastly, additional challenges included strong skewness in variables such as duration and instrumentalness, which complicates interpretation and feature processing decisions.
+
+## References
+
+Pandya, M. *Spotify Tracks Dataset*. Kaggle.\
+https://www.kaggle.com/datasets/maharshipandya/-spotify-tracks-dataset
+
+Spotify. *Spotify Web API Documentation*.\
+https://developer.spotify.com/documentation/web-api
+
+Clark, R. *STA 465 / Math 465: High-Dimensional Data Analysis*. Duke University.\
+https://sites.math.duke.edu/\~re94/Math465/
