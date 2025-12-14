@@ -21,6 +21,8 @@ knitr::opts_chunk$set(
 )
 ```
 
+*Note: the full dataset as well as all QMD files are stored in this public [GitHub repo](https://github.com/natekrall24/STA465FinalProject/tree/main).*
+
 ## Introduction
 
 ### Description of the Data
@@ -111,6 +113,10 @@ We perform PCA on the standardized data and examine the scree plot to determine 
 
 We apply k-means clustering using both the standardized feature matrix and PCA scores. For several choices of $K$, we compute inertia and silhouette scores to identify an appropriate clustering solution. The resulting clusters are characterized by centroid feature profiles and their positions in PCA space.
 
+#### Case study: Taylor Swift vs. Drake
+
+As a focused application of our PCA framework, we compare Taylor Swift and Drake, two highly popular artists with distinct musical styles. Using PCA scores from the standardized audio features, we project tracks by each artist into a shared low-dimensional space to assess whether Spotify’s engineered features capture artist-level stylistic differences.
+
 ## Analysis and Results
 
 This section contains the reproducible code used to generate figures and results for our exploratory analysis, PCA, and k-means clustering. Figures and tables in the report are generated directly from the code chunks below.
@@ -118,9 +124,12 @@ This section contains the reproducible code used to generate figures and results
 ### Exploratory / Preliminary Analysis
 
 ```{r}
+#| fig-cap: "Figure 1: Summary statistics for continuous Spotify audio features."
+
 library(dplyr)
 library(psych)  
 library(GGally)
+library(knitr)
 
 spotify <- read.csv("dataset.csv", stringsAsFactors = FALSE)
 
@@ -133,15 +142,18 @@ audio_features <- spotify %>%
 
 # Summary statistics
 summary_stats <- psych::describe(audio_features)
-summary_stats
+kable(
+  summary_stats,
+  digits = 3,
+)
 ```
 
 As pictured in Figure 1, the summary statistics show a unique heterogeneity across the variety of audio features collected by Spotify. Danceability, energy, and valence have means around 0.5 with small standard deviations and mild skewness, indicating many tracks sit near the middle of these zero to one scales. Loudness averages about -8.3 dB with strong negative skew and high kurtosis, where we note that loudness is measured in decibels relative to full scale. Speechiness, instrumentalness, and liveness all have low means but large positive skew and extreme kurtosis, which implies that most tracks have fewer spoken words, are not extensively instrumental, and have a weaker ambiance level overall. Additionally, tempo centers around 122 BPM with modest spread, while duration is extremely right-skewed and heavy-tailed, capturing a few very long tracks. Lastly, popularity has a broad spread but is essentially symmetric as we see by the closeness of the mean and median. These diagnostics underscore the importance of standardizing the features prior to PCA, given the substantial differences in scale and variability across variables. The heterogeneity and skewness observed here also motivated our use of PCA to extract dominant axes of variation and reduce noise before applying clustering methods.
 
 ```{r}
+#| fig-cap: "Figure 2: Density plots illustrating distribution shapes and scale differences across Spotify audio features."
 library(ggplot2)
 library(tidyr)
-library(dplyr)
 
 audio_features <- spotify %>%
   select(
@@ -169,6 +181,7 @@ ggplot(audio_long, aes(x = value)) +
 The density plots in Figure 2 highlight substantial variation in distributional shapes across features. Several variables bounded between zero and one, such as acousticness, speechiness, and liveness show strong right skew, indicating that most tracks contain low levels of these attributes with a small number of extreme cases. Additionally, variables such as tempo and popularity reveal a bit of complexity with multimodality present.
 
 ```{r}
+#| fig-cap: "Figure 3: Correlation heatmap showing relationships among key audio features."
 # Correlation Heatmap
 GGally::ggcorr(audio_features, label = TRUE, hjust = 0.8, size = 3)
 ```
@@ -176,8 +189,7 @@ GGally::ggcorr(audio_features, label = TRUE, hjust = 0.8, size = 3)
 The correlation heatmap in Figure 3 reveals a strong positive relationship between energy and loudness, consistent with the expectation that louder tracks tend to be perceived as more energetic. Acousticness shows a significant negative correlation with energy, reflecting the distinction between electronically produced, high-energy tracks and more acoustic, lower-energy recordings. Other correlations are relatively weak, suggesting that most features capture distinct musical dimensions.
 
 ```{r}
-library(dplyr)
-library(ggplot2)
+#| fig-cap: "Figure 4: Proportion of Variance Explained by Principal Components"
 
 audio_features <- spotify %>%
   select(
@@ -188,20 +200,41 @@ audio_features <- spotify %>%
 # Standardize all features
 audio_scaled <- scale(audio_features)
 
-# Perform PCA using prcomp()
+# Perform PCA
 pca_result <- prcomp(audio_scaled, center = TRUE, scale. = TRUE)
 
-# View PCA object summary (variance explained)
-summary(pca_result)
+#Variance Explained
+var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
 
-# Loadings
-pca_result$rotation
+pca_variance_table <- data.frame(
+  PC = paste0("PC", seq_along(var_explained)),
+  Variance_Explained = round(var_explained, 4),
+  Cumulative_Variance = round(cumsum(var_explained), 4)
+)
 
-# Extract PCA scores
+kable(
+  pca_variance_table,
+)
+```
+
+Note that we standardized features here to regulate the data and help combat skewness.
+
+```{r}
+#| fig-cap: "Figure 5: PCA loading values showing feature contributions to principal components."
+#PCA Loadings
+loadings <- as.data.frame(pca_result$rotation)
+
+kable(
+  round(loadings, 3),
+)
+
+#PCA Scores
 pca_scores <- as.data.frame(pca_result$x)
 
-# Scree plot
-var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+```
+
+```{r}
+#| fig-cap: "Figure 6: Scree Plot for Proportion of Variance Explained."
 
 scree_data <- data.frame(
   PC = factor(paste0("PC", 1:length(var_explained)),
@@ -219,20 +252,10 @@ ggplot(scree_data, aes(x = PC, y = Variance)) +
     x = "Principal Component",
     y = "Proportion of Variance"
   )
-
-# PCA scatter plot of PC1 vs PC2
-ggplot(pca_scores, aes(x = PC1, y = PC2)) +
-  geom_point(alpha = 0.3, size = 1, color = "darkred") +
-  theme_minimal(base_size = 12) +
-  labs(
-    title = "PCA Projection: PC1 vs PC2",
-    x = "PC1",
-    y = "PC2"
-  )
-
 ```
 
 ```{r}
+#| fig-cap: "Figure 7: 3D PCA scatter plot illustrating high-dimensional structure among popular songs."
 library(plotly)
 
 # 3D PCA scatter plot (PC1, PC2, PC3)
@@ -256,14 +279,7 @@ plot_ly(
 ```
 
 ```{r}
-library(knitr)
-loadings <- pca_result$rotation
-loadings
-kable(loadings, digits = 3, caption = "PCA Loadings for Audio Features")
-```
-
-```{r}
-library(ggplot2)
+#| fig-cap: "Figure 8: Visual loadings plot for PC1 and PC2. Arrows represent feature influence directions."
 
 loadings_df <- as.data.frame(pca_result$rotation[,1:2])
 loadings_df$feature <- rownames(loadings_df)
@@ -279,17 +295,7 @@ ggplot(loadings_df, aes(x = PC1, y = PC2, label = feature)) +
 ```
 
 ```{r}
-var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
-
-data.frame(
-  PC = paste0("PC", 1:length(var_explained)),
-  Variance = round(var_explained, 4),
-  Cumulative = round(cumsum(var_explained), 4)
-)
-
-```
-
-```{r}
+#| fig-cap: "Figure 9: PCA projection (PC1 vs. PC2) colored by popularity. Note this also represents our general plot of PC1 vs PC2."
 ggplot(pca_scores, aes(PC1, PC2, color = spotify$popularity)) +
   geom_point(alpha = 0.4, size = 1) +
   scale_color_viridis_c() +
@@ -298,6 +304,7 @@ ggplot(pca_scores, aes(PC1, PC2, color = spotify$popularity)) +
 ```
 
 ```{r}
+#| fig-cap: "Figure 10: PCA projection (PC1 vs. PC2) colored by genre."
 ggplot(pca_scores, aes(PC1, PC2, color = spotify$track_genre)) +
   geom_point(alpha = 0.5, size = 1) +
   theme_minimal() +
@@ -337,6 +344,8 @@ pca_pop_scores <- as.data.frame(pca_pop$x)
 ```
 
 ```{r}
+#| fig-cap: "Figure 11: Elbow plot used to select an appropriate number of clusters for k-means."
+
 pca_pop_reduced <- pca_pop_scores[, 1:3]
 set.seed(123)
 
@@ -364,6 +373,7 @@ popular_songs$cluster <- factor(k_pop$cluster)
 ```
 
 ```{r}
+#| fig-cap: "Figure 12: K-means clustering results visualized in PCA space (PC1 vs. PC2)."
 library(ggplot2)
 
 ggplot(pca_pop_scores, aes(PC1, PC2, color = cluster)) +
@@ -421,6 +431,40 @@ cluster2_songs <- popular_songs %>%
 # head(cluster2_songs, 20)
 ```
 
+```{r}
+#| fig-cap: "Figure 13: Cluster-level feature profiles showing mean audio characteristics for each cluster."
+
+kable(
+  cluster_feature_means,
+  digits = 3,
+  caption = "Mean Audio Feature Values by K-means Cluster (Popular Songs)"
+)
+```
+
+```{r}
+#| fig-cap: "Figure 14: A PCA Comparison of Two known artists: Taylor Swift vs. Drake"
+#| 
+artist_pca <- pca_scores %>%
+  mutate(artist = spotify$artists) %>%
+  filter(
+    grepl("Taylor Swift", artist) | grepl("Drake", artist)
+  ) %>%
+  mutate(
+    artist = ifelse(grepl("Taylor Swift", artist), "Taylor Swift", "Drake")
+  )
+
+# Plot PCA comparison
+ggplot(artist_pca, aes(x = PC1, y = PC2, color = artist)) +
+  geom_point(alpha = 0.6, size = 2) +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "PCA Comparison of Two Artists: Taylor Swift vs. Drake",
+    x = "PC1",
+    y = "PC2",
+    color = "Artist"
+  )
+```
+
 ## Discussion
 
 ### Findings
@@ -434,6 +478,12 @@ As seen in Figure 6, the PCA projections show that popularity does not form any 
 #### K-means Clustering
 
 Before applying k-means clustering in the PCA space, we derived an elbow plot for k-means to select the appropriate number of clusters. The elbow plot in Figure 8 shows a clear dropoff in the total within-cluster sum of squares beyond k = 4, therefore we proceeded with 4 clusters. The visualization of these clusters in Figure 9 reveals compact groups shaped by the dominant PCA axes. The cluster specific feature means that we display in Figure 10 clarify these vivid distinctions. For example, cluster 2 corresponds to highly acoustic and low energy tracks, while cluster 4 reflects high danceability tracks that have a high tempo and valence. Additionally, cluster 3 corresponds to energetic yet instrumentally sparse songs. Lastly, cluster 1 corresponds to a rough middle ground in all of the audio qualities of all the other clusters. Ultimately, these results suggest that highly popular songs partition into these clear regions that are described by a few key audio qualities, thus reinforcing the PCA findings we discovered earlier. Ultimately, we can take away this unique insight that there are 4 distinct clusters that some of the most popular songs can be grouped into, and their similarity lies in a couple of core features in our dataset such as acousticness, energy, tempo, valence, and instrumentalness.
+
+**Application of Results**
+
+The resulting projections in figure 14 show that songs by the Drake and Taylor Swift tend to occupy different regions of PCA space, with Drake’s tracks aligning more strongly with components associated with intensity and speech-related features (more toward the top right of the plot), and Taylor Swift’s songs exhibiting greater variation along dimensions related to melody and acoustic structure (more toward the bottom left of the plot). This case study illustrates how unsupervised dimensionality reduction can be used to compare musical identities using only quantitative audio descriptors, which is truly interesting as these identities are typically compared qualitatively.
+
+Although we initially considered comparing songs across musical decades, we ultimately did not pursue this analysis due to concerns about the reliability of the data from older music and the lack of reliable release-date information in the dataset.
 
 ### Early-Stage Decisions
 
